@@ -39,18 +39,16 @@ module MailGate
     #
     # Returns instance of Mail::Message.
     def deliver!(mail)
-      unless settings[:append_emails] == false
-        original_emails = email_list(mail)
-      end
+      original_emails = email_list(mail)
 
       %w{ to cc bcc }.each do |field|
         mail.send(:"#{field}=", filter_emails(mail.send(field)))
       end
 
       unless settings[:append_emails] == false
-        new_emails = original_emails - email_list(mail)
-        if !new_emails.empty?
-          mail.body = "#{mail.body}\n\nExtracted Recipients: #{new_emails.join(', ')}"
+        rejected_emails = original_emails - email_list(mail)
+        if !rejected_emails.empty?
+          mail.body = "#{mail.body}\n\nExtracted Recipients: #{rejected_emails.join(', ')}"
         end
       end
 
@@ -58,7 +56,13 @@ module MailGate
         mail.subject = settings[:subject_prefix] + mail.subject
       end
 
-      @delivery_method.deliver!(mail) unless mail.to.blank?
+      if mail.to.blank?
+        if defined? ActionMailer
+          ActionMailer::Base.logger.info { "MailGate: suppressing mail to #{Array(original_emails).join(', ')}" }
+        end
+      else
+        @delivery_method.deliver!(mail) unless mail.to.blank?
+      end
 
       mail
     end
@@ -71,7 +75,7 @@ module MailGate
     #
     # Examples
     #
-    #   Given [/hacking.com/] being the whitelist.
+    #   Given [/github.com/] being the whitelist.
     #
     #   filter_emails('me@garrettbjerkhoel.com')
     #   # => nil
