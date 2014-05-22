@@ -45,24 +45,21 @@ module MailGate
         mail.send(:"#{field}=", filter_emails(mail.send(field)))
       end
 
-      unless settings[:append_emails] == false
-        rejected_emails = original_emails - email_list(mail)
-        if !rejected_emails.empty?
-          mail.body = "#{mail.body}\n\nExtracted Recipients: #{rejected_emails.join(', ')}"
-        end
+      rejected_emails = original_emails - email_list(mail)
+
+      if settings[:append_emails] != false && rejected_emails.any?
+        mail.body = "#{mail.body}\n\nExtracted Recipients: #{rejected_emails.join(', ')}"
       end
 
       if settings[:subject_prefix]
         mail.subject = settings[:subject_prefix] + mail.subject
       end
 
-      if mail.to.blank?
-        if defined? ActionMailer
-          ActionMailer::Base.logger.info { "MailGate: suppressing mail to #{Array(original_emails).join(', ')}" }
-        end
-      else
-        @delivery_method.deliver!(mail) unless mail.to.blank?
+      if rejected_emails.any? && defined?(ActionMailer)
+        ActionMailer::Base.logger.info { "MailGate: suppressing mail to #{rejected_emails.join(', ')}" }
       end
+
+      @delivery_method.deliver!(mail) unless mail.to.blank?
 
       mail
     end
